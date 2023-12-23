@@ -1,110 +1,108 @@
 const express = require("express");
 const app = express();
 const User = require("./models/userModal");
-const Contact = require("./models/contactModal")
+const Contact = require("./models/contactModal");
 const sgMail = require("@sendgrid/mail");
-const axios = require("axios")
-const mongoose = require("mongoose")
+const axios = require("axios");
+const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const { createPass } = require("./helpers/createPass");
 dotenv.config();
 
 app.use(express.json());
 
-sgMail.setApiKey(process.env.SG_MAIL_API_KEY);
+sgMail.setApiKey(process.env.NEXT_PUBLIC_SENDGRID_API_KEY);
 
 app.post("/sendBulkEmail", async (req, res) => {
-    try {
-        
-        const { userId } = req.body
-        const issuer = await User.findOne({ _id: req.body.userId });
-        if (!issuer) {
-            return res.status(400).json({ message: "User not found" });
+  try {
+    const { userId } = req.body;
+    const issuer = await User.findOne({ _id: req.body.userId });
+    if (!issuer) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const contacts = await Contact.find({ user: userId }).select("_id");
+    const contactIds = contacts.map((contact) => contact._id);
+    console.log(contactIds, "i am here");
+
+    if (contactIds.length > issuer.email_counter) {
+      return res.status(400).json({
+        message: `You are exceeding your monthly limit of sending emails.You have ${issuer.email_counter} email credits left for this month`,
+      });
+    }
+
+    const contactPromises = contactIds.map(async (contactId) => {
+      try {
+        const contact = await Contact.findOne({ _id: contactId });
+
+        if (contact.referral_link_shared) {
+          console.log("here i am ");
+          return;
         }
 
-       const contacts = await Contact.find({ user: userId }).select('_id')
-       const contactIds = contacts.map(contact => contact._id);
-       console.log(contactIds, "i am here")
+        const issuerId = "3388000000022217914";
 
-        if (contactIds.length > issuer.email_counter) {
-        return res.status(400).json({
-          message: `You are exceeding your monthly limit of sending emails.You have ${issuer.email_counter} email credits left for this month`,
-           });
-        }
-
-        const contactPromises = contactIds.map(async (contactId) => {
-                 try {
-          const contact = await Contact.findOne({ _id: contactId });
-
-          if (contact.referral_link_shared) {
-            console.log("here i am ")
-            return;
-          }
-
-          const issuerId = "3388000000022217914";
-
-          const classId = `${issuerId}.multiple`;
-          const data = {
-            email: contact.email,
-            firstname: contact.firstname,
-            lastname: contact.lastname,
-            uniqueLink: contact.referral_link,
-            issuer: {
-              profile_image: issuer.profile_image,
-              firstname: issuer.firstname,
-              lastname: issuer.lastname,
-              _id: issuer._id,
-              phone: issuer.phone,
-              email: issuer.email,
-              username: issuer.username,
-              role: issuer.role,
-            },
+        const classId = `${issuerId}.multiple`;
+        const data = {
+          email: contact.email,
+          firstname: contact.firstname,
+          lastname: contact.lastname,
+          uniqueLink: contact.referral_link,
+          issuer: {
+            profile_image: issuer.profile_image,
+            firstname: issuer.firstname,
+            lastname: issuer.lastname,
+            _id: issuer._id,
             phone: issuer.phone,
-          };
+            email: issuer.email,
+            username: issuer.username,
+            role: issuer.role,
+          },
+          phone: issuer.phone,
+        };
 
-          //createing google wallet pass
-                     const walletUrl = await createPass(data);
-                     console.log(walletUrl,"i am walletUrl")
+        //createing google wallet pass
+        const walletUrl = await createPass(data);
+        console.log(walletUrl, "i am walletUrl");
 
-          //creating apple wallet pass
-          const applePass = await axios({
-            method: "POST",
-            url: "http://13.40.55.32:8080/create",
-            data: {
-              data: data,
+        //creating apple wallet pass
+        const applePass = await axios({
+          method: "POST",
+          url: "http://13.40.55.32:8080/create",
+          data: {
+            data: data,
+          },
+        });
+
+        console.log(applePass.data, "i am data");
+
+        let date = new Date();
+
+        let updatedContact = await Contact.updateOne(
+          { _id: contact._id },
+          {
+            $set: {
+              apple_wallet_pass_created_date: date.toString(),
+              google_wallet_pass_created_date: date.toString(),
+              referral_link_shared: true,
+              referral_link_last_shared: date.toString(),
+              apple_wallet_pass: applePass.data,
+              google_wallet_pass: walletUrl,
             },
-          });
-                     
-                     console.log(applePass.data,"i am data")
+          },
+          { new: true }
+        );
 
-                     let date = new Date();
-                     
-          let updatedContact = await Contact.updateOne(
-            { _id: contact._id },
-            {
-              $set: {
-                apple_wallet_pass_created_date: date.toString(),
-                google_wallet_pass_created_date: date.toString(),
-                referral_link_shared : true,
-                    referral_link_last_shared: date.toString(),
-                apple_wallet_pass: applePass.data,
-                google_wallet_pass: walletUrl,
-               
-              },
-            },
-            { new: true }
-                     );
-                     
-                     console.log(updatedContact,"here it is")
+        console.log(updatedContact, "here it is");
 
-          const msg = {
-            to: `${contact.email}`, // Change to your recipient
-            from: {
-              name: "ReferMe",
-              email: "contact@referme.uk",
-            }, // Change to your verified sender
-            subject: `${issuer.organization} - Here is our new ReferMe profile, You Can Share & Earn Rewards By Sending Us Referrals`,
-            html: ` <!DOCTYPE html>
+        const msg = {
+          to: `${contact.email}`, // Change to your recipient
+          from: {
+            name: "ReferMe",
+            email: "contact@referme.uk",
+          }, // Change to your verified sender
+          subject: `${issuer.organization} - Here is our new ReferMe profile, You Can Share & Earn Rewards By Sending Us Referrals`,
+          html: ` <!DOCTYPE html>
         <html>
         <head>
             <style>
@@ -179,7 +177,13 @@ app.post("/sendBulkEmail", async (req, res) => {
                             <li>QR Code: For your convenience, we've also generated a QR code linked to your unique referral URL. Simply add the QR code to your wallet to share it with your contacts when you are out and about and face to face with people.</li>
                             <li>Earn Rewards: Whenever someone you refer becomes our valued customer, you'll be rewarded! We offer £${
                               contact.referral_amount
-                            } Amazon Gift Card for each successful referral. Social media is a good place to start sharing!</li>
+                            } ${
+            contact.payment_method
+              ? contact.payment_method === "amazon_gift"
+                ? "Amazon Gift Card"
+                : "Via Bank Transfer"
+              : ""
+          }  on completion of sale. Social media is a good place to start sharing!</li>
                         </ul>
                         <p style="margin: 0 0 20px 0">
                         You can store my business card with the QR code in your apple or google walltet, just click the buttons below to add them:
@@ -244,73 +248,68 @@ app.post("/sendBulkEmail", async (req, res) => {
             </table>
         </body>
         </html>`,
-          };
-          try {
-            await sgMail.send(msg);
-            console.log(" mail sent");
-          } catch (e) {
-            console.log(e, "this is send grid errror");
-            console.log(e, " this is error");
-            return { contactId, error: e };
-            // return res
-            //   .status(400)
-            //   .json({ message: "Something unusual happened" });
-          }
-        
-
-          return { contactId };
-        } catch (error) {
-          return { contactId, error: error.message };
-        }
-        });
-
-
-        const chunkedPromises = [];
-            for (let i = 0; i < contactPromises.length; i += 750) {
-            chunkedPromises.push(
-                Promise.allSettled(contactPromises.slice(i, i + 750))
-            );
-        }
-        issuer.email_counter -= contactIds.length;
-      await issuer.save();
-        
-
+        };
         try {
-  const results = await Promise.allSettled(chunkedPromises);
-  console.log("All contacts processed:", results);
+          await sgMail.send(msg);
+          console.log(" mail sent");
+        } catch (e) {
+          console.log(e, "this is send grid errror");
+          console.log(e, " this is error");
+          return { contactId, error: e };
+          // return res
+          //   .status(400)
+          //   .json({ message: "Something unusual happened" });
+        }
 
-  const errors = [];
+        return { contactId };
+      } catch (error) {
+        return { contactId, error: error.message };
+      }
+    });
 
-  results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        console.log(result)
-    } else {
-      errors.push(result.reason);
+    const chunkedPromises = [];
+    for (let i = 0; i < contactPromises.length; i += 750) {
+      chunkedPromises.push(
+        Promise.allSettled(contactPromises.slice(i, i + 750))
+      );
     }
-  });
+    issuer.email_counter -= contactIds.length;
+    await issuer.save();
 
-  console.log("Errors:", errors);
+    try {
+      const results = await Promise.allSettled(chunkedPromises);
+      console.log("All contacts processed:", results);
 
-  return res.status(200).json({
-    message: "User Updated Successfully",
-    whatsapp_credit: issuer.whatsapp_counter,
-    email_credit: issuer.email_counter,
-    errors: errors, // Sending the errors array in the response
-  });
-} catch (error) {
-  console.error("Error processing contacts:", error);
-  return res.status(500).json({ message: "Internal Server Error" });
-}
+      const errors = [];
 
-    }catch (e) {
-        res.status(400).send("failure");
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          console.log(result);
+        } else {
+          errors.push(result.reason);
+        }
+      });
+
+      console.log("Errors:", errors);
+
+      return res.status(200).json({
+        message: "User Updated Successfully",
+        whatsapp_credit: issuer.whatsapp_counter,
+        email_credit: issuer.email_counter,
+        errors: errors, // Sending the errors array in the response
+      });
+    } catch (error) {
+      console.error("Error processing contacts:", error);
+      return res.status(500).json({ message: "Internal Server Error" });
     }
-
+  } catch (e) {
+    res.status(400).send("failure");
+  }
 });
 
 app.get("/test", async (req, res) => {
-  console.log("I am working")
-  return res.status(200).json({message:"This endpoint working fine"})
-})
+  console.log("I am working");
+  return res.status(200).json({ message: "This endpoint working fine" });
+});
 
 module.exports = app;
