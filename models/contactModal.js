@@ -86,9 +86,13 @@ const contactSchema = mongoose.Schema({
     ref: "Business",
   },
   payment_method: {
-    type: Number,
+    type: String,
+    enum: ["bank_transfer", "amazon_gift"],
   },
-  payment_type: {},
+  payment_type: {
+    type: String,
+    enum: ["after_sale", "after_referral"],
+  },
   apple_wallet_pass_created_date: {
     type: String,
   },

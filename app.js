@@ -34,7 +34,7 @@ app.post("/sendBulkEmail", async (req, res) => {
     const contactPromises = contactIds.map(async (contactId) => {
       try {
         const contact = await Contact.findOne({ _id: contactId });
-
+        console.log(contact, "this is payment method");
         if (contact.referral_link_shared) {
           console.log("here i am ");
           return;
@@ -93,7 +93,7 @@ app.post("/sendBulkEmail", async (req, res) => {
           { new: true }
         );
 
-        console.log(updatedContact, "here it is");
+        console.log(contact.payment_method, "here it is");
 
         const msg = {
           to: `${contact.email}`, // Change to your recipient
