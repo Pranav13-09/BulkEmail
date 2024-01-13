@@ -37,6 +37,14 @@ const userSchema = mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  default_payment_method: {
+    type: String,
+    enum: ["bank_transfer", "amazon_gift"],
+  },
+  default_payment_type: {
+    type: String,
+    enum: ["after_sale", "after_referral"],
+  },
   totalContactsToUpload: {
     type: Number,
   },
@@ -158,6 +166,10 @@ const userSchema = mongoose.Schema({
   referrals_received: {
     type: Number,
     default: 0,
+  },
+  contact_limit: {
+    type: Number,
+    default: 5,
   },
   total_reviews: {
     type: Number,

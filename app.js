@@ -182,7 +182,9 @@ app.post("/sendBulkEmail", async (req, res) => {
               ? contact.payment_method === "amazon_gift"
                 ? "Amazon Gift Card"
                 : "Via Bank Transfer"
-              : ""
+              : issuer.default_payment_method === "amazon_gift"
+              ? "Amazon Gift Card"
+              : "Via Bank Transfer"
           }  on completion of sale. Social media is a good place to start sharing!</li>
                         </ul>
                         <p style="margin: 0 0 20px 0">
